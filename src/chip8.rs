@@ -104,10 +104,10 @@ impl Chip8 {
             LDnnn { nnn } => self.i = nnn,
             LDsx { .. } => (), // Set sound timer register
             LDtx { x } => self.dt = self.regs[x],
+            LDx { x } => if let Some(i) = self.check_keypad() { self.regs[x] = i } else { self.pc -= 2 },
             LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize + i] },
             // LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize]; self.i += 1 },
             LDxkk { x, kk } => self.regs[x] = kk,
-            LDx { x } => if let Some(i) = self.check_keypad() { self.regs[x] = i } else { self.pc -= 2 },
             LDxt { x } => self.regs[x] = self.dt,
             LDxy { x, y } => self.regs[x] = self.regs[y],
             OR { x, y } => self.regs[x] |= self.regs[y],

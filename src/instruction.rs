@@ -57,7 +57,7 @@ impl Instruction {
             (0x0, 0x0, 0xE, 0xE) => RET,
             (0x1, _, _, _) => JPnnn { nnn },
             (0x2, _, _, _) => CALL { nnn },
-            (0x3, _, _, _) => SExkk {x, kk },
+            (0x3, _, _, _) => SExkk { x, kk },
             (0x4, _, _, _) => SNExkk { x, kk },
             (0x5, _, _, 0x0) => SExy { x, y },
             (0x6, _, _, _) => LDxkk { x, kk },
