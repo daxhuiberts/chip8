@@ -1,3 +1,4 @@
+extern crate structopt;
 extern crate piston_window;
 extern crate rand;
 
@@ -6,16 +7,25 @@ mod instruction;
 
 use chip8::*;
 use piston_window::*;
+use structopt::StructOpt;
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
 const SIZE: u32 = 10;
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "chip8")]
+struct Opt {
+    #[structopt(name = "ROM", parse(from_os_str))]
+    rom: std::path::PathBuf,
+}
+
 fn main() {
-    let bytes: &[u8] = include_bytes!("../assets/BLITZ");
+    let opt = Opt::from_args();
+    let bytes = &std::fs::read(opt.rom).unwrap();
     let mut chip8 = Chip8::new(bytes);
 
-    let window_settings = WindowSettings::new("Hello Piston!", [WIDTH * SIZE, HEIGHT * SIZE]);
+    let window_settings = WindowSettings::new("Chip8", [WIDTH * SIZE, HEIGHT * SIZE]);
     let mut window: PistonWindow = window_settings.exit_on_esc(true).build().unwrap();
 
     let mut event_settings = window.get_event_settings();
@@ -76,7 +86,7 @@ fn main() {
                     next = false;
                 }
             } else {
-                for _i in 0..10 {
+                for _i in 0..5 {
                     chip8.tick();
                 }
                 chip8.decrement_counter();
