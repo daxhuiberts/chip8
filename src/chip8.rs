@@ -1,8 +1,11 @@
 use super::instruction::Instruction;
 use rand;
 
-const WIDTH: usize = 64;
-const HEIGHT: usize = 32;
+pub const WIDTH: usize = 128;
+pub const HEIGHT: usize = 64;
+const MEMORY: usize = 4096;
+const ROM_OFFSET: usize = 512;
+
 const FONT_SET: [u8; 80] = [
   0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
   0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -36,9 +39,9 @@ pub struct Chip8 {
 
 impl Chip8 {
     pub fn new(data: &[u8]) -> Self {
-        let mut mem = [0; 4096];
+        let mut mem = [0; MEMORY];
         mem[0..FONT_SET.len()].copy_from_slice(&FONT_SET);
-        mem[512..(512 + data.len())].copy_from_slice(data);
+        mem[ROM_OFFSET..(ROM_OFFSET + data.len())].copy_from_slice(data);
 
         Chip8 {
             i: 0,
@@ -46,7 +49,7 @@ impl Chip8 {
             mem: mem,
             regs: [0; 16],
             keypad: 0,
-            display: [false; 2048],
+            display: [false; WIDTH * HEIGHT],
             stack: [0; 16],
             sp: 0,
             dt: 0,
@@ -92,7 +95,7 @@ impl Chip8 {
             ADDxy { x, y } => { let (new, carry) = self.regs[x].overflowing_add(self.regs[y]); self.regs[x] = new; self.regs[0xF] = carry as u8 },
             AND { x, y } => self.regs[x] &= self.regs[y],
             CALL { nnn } => { self.stack[self.sp as usize] = self.pc; self.sp += 1; self.pc = nnn },
-            CLS => self.display.copy_from_slice(&[false; 2048]),
+            CLS => self.display.copy_from_slice(&[false; WIDTH * HEIGHT]),
             DRW { x, y, n } => self.regs[0xF] = self.draw(x, y, n) as u8,
             DRWH { .. } => panic!("DRWH not supported yet"), // Draws extended sprite (16x16) at screen location rx,ry
             EXIT => panic!("EXIT not supported yet"), // ???
@@ -145,14 +148,20 @@ impl Chip8 {
                 if (self.mem[self.i as usize + yoffset] >> (7 - xoffset) & 0x01) == 1 {
                     let x = (self.regs[x] as usize + xoffset) % WIDTH;
                     let y = (self.regs[y] as usize + yoffset) % HEIGHT;
-                    let mut old_value = &mut self.display[y * WIDTH + x];
-                    collision = collision || *old_value;
-                    *old_value = !*old_value;
+                    collision = collision || self.toggle_pixel(x * 2, y * 2);
+                    collision = collision || self.toggle_pixel(x * 2, y * 2 + 1);
+                    collision = collision || self.toggle_pixel(x * 2 + 1, y * 2);
+                    collision = collision || self.toggle_pixel(x * 2 + 1, y * 2 + 1);
                 }
             }
         }
 
         collision
+    }
+
+    fn toggle_pixel(&mut self, x: usize, y: usize) -> bool {
+        let pixel = &mut self.display[x + y * WIDTH];
+        std::mem::replace(pixel, true)
     }
 
     fn check_keypad(&self) -> Option<u8> {

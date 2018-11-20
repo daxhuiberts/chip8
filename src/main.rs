@@ -9,9 +9,7 @@ use chip8::*;
 use piston_window::*;
 use structopt::StructOpt;
 
-const WIDTH: u32 = 64;
-const HEIGHT: u32 = 32;
-const SIZE: u32 = 10;
+const PIXEL_SIZE: usize = 5;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "chip8")]
@@ -25,7 +23,7 @@ fn main() {
     let bytes = &std::fs::read(opt.rom).unwrap();
     let mut chip8 = Chip8::new(bytes);
 
-    let window_settings = WindowSettings::new("Chip8", [WIDTH * SIZE, HEIGHT * SIZE]);
+    let window_settings = WindowSettings::new("Chip8", [(chip8::WIDTH * PIXEL_SIZE) as u32, (chip8::HEIGHT * PIXEL_SIZE) as u32]);
     let mut window: PistonWindow = window_settings.exit_on_esc(true).build().unwrap();
 
     let mut event_settings = window.get_event_settings();
@@ -43,9 +41,9 @@ fn main() {
                 clear([0.0, 0.0, 0.0, 1.0], graphics);
 
                 chip8.get_display().iter().enumerate().for_each(|(index, &bit)| {
-                    let (x, y) = (index % WIDTH as usize, index / WIDTH as usize);
+                    let (x, y) = (index % chip8::WIDTH as usize, index / chip8::WIDTH as usize);
                     let color = if bit { [1.0, 1.0, 0.0, 1.0] } else { [0.0, 0.0, 0.0, 1.0] };
-                    let position = [(x * SIZE as usize) as f64, (y * SIZE as usize) as f64, SIZE as f64, SIZE as f64];
+                    let position = [(x * PIXEL_SIZE as usize) as f64, (y * PIXEL_SIZE as usize) as f64, PIXEL_SIZE as f64, PIXEL_SIZE as f64];
                     rectangle(color, position, context.transform, graphics);
                 });
             });
