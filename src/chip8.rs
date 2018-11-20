@@ -94,35 +94,35 @@ impl Chip8 {
             CALL { nnn } => { self.stack[self.sp as usize] = self.pc; self.sp += 1; self.pc = nnn },
             CLS => self.display.copy_from_slice(&[false; 2048]),
             DRW { x, y, n } => self.regs[0xF] = self.draw(x, y, n) as u8,
-            DRWH { .. } => panic!("DRWH not supported yet"),
-            EXIT => panic!("EXIT not supported yet"),
+            DRWH { .. } => panic!("DRWH not supported yet"), // Draws extended sprite (16x16) at screen location rx,ry
+            EXIT => panic!("EXIT not supported yet"), // ???
             INVALID { opcode } => panic!("opcode {:#X} not supported", opcode),
-            HIGH => panic!("HIGH not supported yet"),
+            HIGH => panic!("HIGH not supported yet"), // enable extended screen mode (128 x 64)
             JPnnn { nnn } => self.pc = nnn,
             JPnnnv { nnn } => self.pc = nnn + self.regs[0] as u16,
             LDbx { x } => self.mem[self.i as usize ..= self.i as usize + 2].copy_from_slice(&Self::get_bcd(self.regs[x])),
             LDfx { x } => self.i = self.regs[x] as u16 * 5,
-            LDhfx { .. } => panic!("LDhfx not supported yet"),
+            LDhfx { .. } => panic!("LDhfx not supported yet"), // Same as LDfx, but with * 10
             LDix { x } => for i in 0..=x { self.mem[self.i as usize + i] = self.regs[i] },
             // LDix { x } => for i in 0..=x { self.mem[self.i as usize] = self.regs[i]; self.i += 1 },
             LDnnn { nnn } => self.i = nnn,
-            LDrx { .. } => panic!("LDrx not supported yet"),
+            LDrx { .. } => panic!("LDrx not supported yet"), // ???
             LDsx { .. } => (), // Set sound timer register
             LDtx { x } => self.dt = self.regs[x],
             LDx { x } => if let Some(i) = self.check_keypad() { self.regs[x] = i } else { self.pc -= 2 },
             LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize + i] },
             // LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize]; self.i += 1 },
             LDxkk { x, kk } => self.regs[x] = kk,
-            LDxr { .. } => panic!("LDxr not supported yet"),
+            LDxr { .. } => panic!("LDxr not supported yet"), // ???
             LDxt { x } => self.regs[x] = self.dt,
             LDxy { x, y } => self.regs[x] = self.regs[y],
-            LOW => panic!("LOW not supported yet"),
+            LOW => panic!("LOW not supported yet"), // disable extended screen mode
             OR { x, y } => self.regs[x] |= self.regs[y],
             RET => { self.sp -= 1; self.pc = self.stack[self.sp as usize] },
             RND { x, kk } => self.regs[x] = rand::random::<u8>() & kk,
-            SCDn { .. } => panic!("SCDn not supported yet"),
-            SCL => panic!("SCL not supported yet"),
-            SCR => panic!("SCR not supported yet"),
+            SCDn { .. } => panic!("SCDn not supported yet"), // scroll the screen down N lines
+            SCL => panic!("SCL not supported yet"), // scroll screen 4 pixels left
+            SCR => panic!("SCR not supported yet"), // scroll screen 4 pixels right
             SExkk { x, kk } => if self.regs[x] == kk { self.pc += 2 },
             SExy { x, y } => if self.regs[x] == self.regs[y] { self.pc += 2 },
             SHL { x, .. } => { self.regs[0xF] = self.regs[x] >> 7; self.regs[x] <<= 1 },
