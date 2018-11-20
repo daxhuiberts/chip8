@@ -16,6 +16,8 @@ const PIXEL_SIZE: usize = 5;
 struct Opt {
     #[structopt(name = "ROM", parse(from_os_str))]
     rom: std::path::PathBuf,
+    #[structopt(short = "s", long = "speed", default_value = "1")]
+    speed: u8,
 }
 
 fn main() {
@@ -84,7 +86,7 @@ fn main() {
                     next = false;
                 }
             } else {
-                for _i in 0..5 {
+                for _i in 0..(opt.speed * 5) {
                     chip8.tick();
                 }
                 chip8.decrement_counter();
