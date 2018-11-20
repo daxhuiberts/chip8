@@ -148,10 +148,10 @@ impl Chip8 {
                 if (self.mem[self.i as usize + yoffset] >> (7 - xoffset) & 0x01) == 1 {
                     let x = (self.regs[x] as usize + xoffset) % WIDTH;
                     let y = (self.regs[y] as usize + yoffset) % HEIGHT;
-                    collision = collision || self.toggle_pixel(x * 2, y * 2);
-                    collision = collision || self.toggle_pixel(x * 2, y * 2 + 1);
-                    collision = collision || self.toggle_pixel(x * 2 + 1, y * 2);
-                    collision = collision || self.toggle_pixel(x * 2 + 1, y * 2 + 1);
+                    collision = collision | self.toggle_pixel(x * 2, y * 2);
+                    self.toggle_pixel(x * 2, y * 2 + 1);
+                    self.toggle_pixel(x * 2 + 1, y * 2);
+                    self.toggle_pixel(x * 2 + 1, y * 2 + 1);
                 }
             }
         }
@@ -161,7 +161,8 @@ impl Chip8 {
 
     fn toggle_pixel(&mut self, x: usize, y: usize) -> bool {
         let pixel = &mut self.display[x + y * WIDTH];
-        std::mem::replace(pixel, true)
+        *pixel ^= true;
+        !*pixel
     }
 
     fn check_keypad(&self) -> Option<u8> {
