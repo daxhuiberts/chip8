@@ -9,7 +9,7 @@ use chip8::*;
 use piston_window::*;
 use structopt::StructOpt;
 
-const PIXEL_SIZE: usize = 5;
+const PIXEL_SIZE: usize = 10;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "chip8")]

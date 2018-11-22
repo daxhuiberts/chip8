@@ -26,6 +26,7 @@ const FONT_SET: [u8; 80] = [
 ];
 
 pub struct Chip8 {
+    super_mode: bool,
     i: u16,
     pc: u16,
     mem: [u8; 4096],
@@ -37,6 +38,10 @@ pub struct Chip8 {
     dt: u8
 }
 
+fn offset(x: usize, y: usize) -> usize {
+    (x % WIDTH) + ((y % HEIGHT) * WIDTH)
+}
+
 impl Chip8 {
     pub fn new(data: &[u8]) -> Self {
         let mut mem = [0; MEMORY];
@@ -44,6 +49,7 @@ impl Chip8 {
         mem[ROM_OFFSET..(ROM_OFFSET + data.len())].copy_from_slice(data);
 
         Chip8 {
+            super_mode: false,
             i: 0,
             pc: 0x0200,
             mem: mem,
@@ -97,35 +103,33 @@ impl Chip8 {
             CALL { nnn } => { self.stack[self.sp as usize] = self.pc; self.sp += 1; self.pc = nnn },
             CLS => self.display.copy_from_slice(&[false; WIDTH * HEIGHT]),
             DRW { x, y, n } => self.regs[0xF] = self.draw(x, y, n) as u8,
-            DRWH { .. } => panic!("DRWH not supported yet"), // Draws extended sprite (16x16) at screen location rx,ry
+            DRWH { x, y } => self.regs[0xF] = self.draw_16(x, y) as u8,
             EXIT => panic!("EXIT not supported yet"), // ???
             INVALID { opcode } => panic!("opcode {:#X} not supported", opcode),
-            HIGH => panic!("HIGH not supported yet"), // enable extended screen mode (128 x 64)
+            HIGH => self.super_mode = true,
             JPnnn { nnn } => self.pc = nnn,
             JPnnnv { nnn } => self.pc = nnn + self.regs[0] as u16,
             LDbx { x } => self.mem[self.i as usize ..= self.i as usize + 2].copy_from_slice(&Self::get_bcd(self.regs[x])),
             LDfx { x } => self.i = self.regs[x] as u16 * 5,
-            LDhfx { .. } => panic!("LDhfx not supported yet"), // Same as LDfx, but with * 10
+            LDhfx { x } => self.i = self.regs[x] as u16 * 10,
             LDix { x } => for i in 0..=x { self.mem[self.i as usize + i] = self.regs[i] },
-            // LDix { x } => for i in 0..=x { self.mem[self.i as usize] = self.regs[i]; self.i += 1 },
             LDnnn { nnn } => self.i = nnn,
             LDrx { .. } => panic!("LDrx not supported yet"), // ???
             LDsx { .. } => (), // Set sound timer register
             LDtx { x } => self.dt = self.regs[x],
             LDx { x } => if let Some(i) = self.check_keypad() { self.regs[x] = i } else { self.pc -= 2 },
             LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize + i] },
-            // LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize]; self.i += 1 },
             LDxkk { x, kk } => self.regs[x] = kk,
             LDxr { .. } => panic!("LDxr not supported yet"), // ???
             LDxt { x } => self.regs[x] = self.dt,
             LDxy { x, y } => self.regs[x] = self.regs[y],
-            LOW => panic!("LOW not supported yet"), // disable extended screen mode
+            LOW => self.super_mode = false,
             OR { x, y } => self.regs[x] |= self.regs[y],
             RET => { self.sp -= 1; self.pc = self.stack[self.sp as usize] },
             RND { x, kk } => self.regs[x] = rand::random::<u8>() & kk,
-            SCDn { .. } => panic!("SCDn not supported yet"), // scroll the screen down N lines
-            SCL => panic!("SCL not supported yet"), // scroll screen 4 pixels left
-            SCR => panic!("SCR not supported yet"), // scroll screen 4 pixels right
+            SCDn { n } => self.scroll_down(n),
+            SCL => self.scroll_left(),
+            SCR => self.scroll_right(),
             SExkk { x, kk } => if self.regs[x] == kk { self.pc += 2 },
             SExy { x, y } => if self.regs[x] == self.regs[y] { self.pc += 2 },
             SHL { x, .. } => { self.regs[0xF] = self.regs[x] >> 7; self.regs[x] <<= 1 },
@@ -146,12 +150,38 @@ impl Chip8 {
         for yoffset in 0..(n as usize) {
             for xoffset in 0..8 {
                 if (self.mem[self.i as usize + yoffset] >> (7 - xoffset) & 0x01) == 1 {
-                    let x = (self.regs[x] as usize + xoffset) % WIDTH;
-                    let y = (self.regs[y] as usize + yoffset) % HEIGHT;
-                    collision = collision | self.toggle_pixel(x * 2, y * 2);
-                    self.toggle_pixel(x * 2, y * 2 + 1);
-                    self.toggle_pixel(x * 2 + 1, y * 2);
-                    self.toggle_pixel(x * 2 + 1, y * 2 + 1);
+                    let x = self.regs[x] as usize + xoffset;
+                    let y = self.regs[y] as usize + yoffset;
+
+                    if self.super_mode {
+                        collision = collision | self.toggle_pixel(x, y);
+                    } else {
+                        collision = collision | self.toggle_pixel(x * 2, y * 2);
+                        self.toggle_pixel(x * 2, y * 2 + 1);
+                        self.toggle_pixel(x * 2 + 1, y * 2);
+                        self.toggle_pixel(x * 2 + 1, y * 2 + 1);
+                    }
+                }
+            }
+        }
+
+        collision
+    }
+
+    fn draw_16(&mut self, x: usize, y: usize) -> bool {
+        if !self.super_mode {
+            return false;
+        }
+
+        let mut collision = false;
+
+        for yoffset in 0..16 {
+            for xoffset in 0..16 {
+                if (self.mem[self.i as usize + yoffset * 2 + (xoffset >> 3)] >> (7 - (xoffset & 0x07)) & 0x01) == 1 {
+                    let x = self.regs[x] as usize + xoffset;
+                    let y = self.regs[y] as usize + yoffset;
+
+                    collision = collision | self.toggle_pixel(x, y);
                 }
             }
         }
@@ -160,9 +190,34 @@ impl Chip8 {
     }
 
     fn toggle_pixel(&mut self, x: usize, y: usize) -> bool {
-        let pixel = &mut self.display[x + y * WIDTH];
+        let pixel = &mut self.display[offset(x, y)];
         *pixel ^= true;
         !*pixel
+    }
+
+    fn scroll_down(&mut self, n: u8) {
+        self.display.rotate_right(WIDTH * n as usize);
+        for pixel in &mut self.display[0..(WIDTH * n as usize)] {
+            *pixel = false;
+        }
+    }
+
+    fn scroll_left(&mut self) {
+        self.display.rotate_left(4);
+        for y in 0..HEIGHT {
+            for x in (WIDTH - 4)..WIDTH {
+                self.display[offset(x, y)] = false;
+            }
+        }
+    }
+
+    fn scroll_right(&mut self) {
+        self.display.rotate_right(4);
+        for y in 0..HEIGHT {
+            for x in 0..4 {
+                self.display[offset(x, y)] = false;
+            }
+        }
     }
 
     fn check_keypad(&self) -> Option<u8> {
