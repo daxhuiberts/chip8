@@ -3,39 +3,42 @@ use rand;
 
 pub const WIDTH: usize = 128;
 pub const HEIGHT: usize = 64;
-const MEMORY: usize = 4096;
+const REGISTER_COUNT: usize = 16;
+const STACK_SIZE: usize = 16;
+const MEMORY_SIZE: usize = 4096;
 const ROM_OFFSET: usize = 512;
+const DEBUG_MEMORY_ROW_SIZE: usize = 64;
 
 const FONT_SET: [u8; 80] = [
-  0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-  0x20, 0x60, 0x20, 0x20, 0x70, // 1
-  0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-  0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-  0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-  0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-  0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-  0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-  0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-  0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-  0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-  0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-  0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-  0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-  0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-  0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
 pub struct Chip8 {
     super_mode: bool,
     i: u16,
     pc: u16,
-    mem: [u8; 4096],
-    regs: [u8; 16],
+    mem: [u8; MEMORY_SIZE],
+    regs: [u8; REGISTER_COUNT],
     keypad: u16,
     display: [bool; WIDTH * HEIGHT],
-    stack: [u16; 16],
+    stack: [u16; STACK_SIZE],
     sp: u8,
-    dt: u8
+    dt: u8,
 }
 
 fn offset(x: usize, y: usize) -> usize {
@@ -44,7 +47,7 @@ fn offset(x: usize, y: usize) -> usize {
 
 impl Chip8 {
     pub fn new(data: &[u8]) -> Self {
-        let mut mem = [0; MEMORY];
+        let mut mem = [0; MEMORY_SIZE];
         mem[0..FONT_SET.len()].copy_from_slice(&FONT_SET);
         mem[ROM_OFFSET..(ROM_OFFSET + data.len())].copy_from_slice(data);
 
@@ -53,7 +56,7 @@ impl Chip8 {
             i: 0,
             pc: 0x0200,
             mem: mem,
-            regs: [0; 16],
+            regs: [0; REGISTER_COUNT],
             keypad: 0,
             display: [false; WIDTH * HEIGHT],
             stack: [0; 16],
@@ -85,7 +88,9 @@ impl Chip8 {
     }
 
     pub fn decrement_counter(&mut self) {
-        if self.dt > 0 { self.dt -= 1 };
+        if self.dt > 0 {
+            self.dt -= 1
+        };
     }
 
     fn fetch(&self) -> u16 {
@@ -98,9 +103,17 @@ impl Chip8 {
         match *instruction {
             ADDix { x } => self.i += self.regs[x] as u16,
             ADDxkk { x, kk } => self.regs[x] = self.regs[x].wrapping_add(kk),
-            ADDxy { x, y } => { let (new, carry) = self.regs[x].overflowing_add(self.regs[y]); self.regs[x] = new; self.regs[0xF] = carry as u8 },
+            ADDxy { x, y } => {
+                let (new, carry) = self.regs[x].overflowing_add(self.regs[y]);
+                self.regs[x] = new;
+                self.regs[0xF] = carry as u8
+            }
             AND { x, y } => self.regs[x] &= self.regs[y],
-            CALL { nnn } => { self.stack[self.sp as usize] = self.pc; self.sp += 1; self.pc = nnn },
+            CALL { nnn } => {
+                self.stack[self.sp as usize] = self.pc;
+                self.sp += 1;
+                self.pc = nnn
+            }
             CLS => self.display.copy_from_slice(&[false; WIDTH * HEIGHT]),
             DRW { x, y, n } => self.regs[0xF] = self.draw(x, y, n) as u8,
             DRWH { x, y } => self.regs[0xF] = self.draw_16(x, y) as u8,
@@ -109,37 +122,93 @@ impl Chip8 {
             HIGH => self.super_mode = true,
             JPnnn { nnn } => self.pc = nnn,
             JPnnnv { nnn } => self.pc = nnn + self.regs[0] as u16,
-            LDbx { x } => self.mem[self.i as usize ..= self.i as usize + 2].copy_from_slice(&Self::get_bcd(self.regs[x])),
+            LDbx { x } => self.mem[self.i as usize..=self.i as usize + 2]
+                .copy_from_slice(&Self::get_bcd(self.regs[x])),
             LDfx { x } => self.i = self.regs[x] as u16 * 5,
             LDhfx { x } => self.i = self.regs[x] as u16 * 10,
-            LDix { x } => for i in 0..=x { self.mem[self.i as usize + i] = self.regs[i] },
+            LDix { x } => {
+                for i in 0..=x {
+                    self.mem[self.i as usize + i] = self.regs[i]
+                }
+            }
             LDnnn { nnn } => self.i = nnn,
             LDrx { .. } => panic!("LDrx not supported yet"), // ???
-            LDsx { .. } => (), // Set sound timer register
+            LDsx { .. } => (),                               // Set sound timer register
             LDtx { x } => self.dt = self.regs[x],
-            LDx { x } => if let Some(i) = self.check_keypad() { self.regs[x] = i } else { self.pc -= 2 },
-            LDxi { x } => for i in 0..=x { self.regs[i] = self.mem[self.i as usize + i] },
+            LDx { x } => {
+                if let Some(i) = self.check_keypad() {
+                    self.regs[x] = i
+                } else {
+                    self.pc -= 2
+                }
+            }
+            LDxi { x } => {
+                for i in 0..=x {
+                    self.regs[i] = self.mem[self.i as usize + i]
+                }
+            }
             LDxkk { x, kk } => self.regs[x] = kk,
             LDxr { .. } => panic!("LDxr not supported yet"), // ???
             LDxt { x } => self.regs[x] = self.dt,
             LDxy { x, y } => self.regs[x] = self.regs[y],
             LOW => self.super_mode = false,
             OR { x, y } => self.regs[x] |= self.regs[y],
-            RET => { self.sp -= 1; self.pc = self.stack[self.sp as usize] },
+            RET => {
+                self.sp -= 1;
+                self.pc = self.stack[self.sp as usize]
+            }
             RND { x, kk } => self.regs[x] = rand::random::<u8>() & kk,
             SCDn { n } => self.scroll_down(n),
             SCL => self.scroll_left(),
             SCR => self.scroll_right(),
-            SExkk { x, kk } => if self.regs[x] == kk { self.pc += 2 },
-            SExy { x, y } => if self.regs[x] == self.regs[y] { self.pc += 2 },
-            SHL { x, .. } => { self.regs[0xF] = self.regs[x] >> 7; self.regs[x] <<= 1 },
-            SHR { x, .. } => { self.regs[0xF] = self.regs[x] & 1; self.regs[x] >>= 1 },
-            SKNP { x } => if self.keypad & (1 << self.regs[x]) == 0 { self.pc += 2 },
-            SKP { x } => if self.keypad & (1 << self.regs[x]) != 0 { self.pc += 2 },
-            SNExkk { x, kk } => if self.regs[x] != kk { self.pc += 2 },
-            SNExy { x, y } => if self.regs[x] != self.regs[y] { self.pc += 2 },
-            SUB { x, y } => { let (new, borrow) = self.regs[x].overflowing_sub(self.regs[y]); self.regs[x] = new; self.regs[0xF] = !borrow as u8 },
-            SUBN { x, y } => { let (new, borrow) = self.regs[y].overflowing_sub(self.regs[x]); self.regs[x] = new; self.regs[0xF] = !borrow as u8 },
+            SExkk { x, kk } => {
+                if self.regs[x] == kk {
+                    self.pc += 2
+                }
+            }
+            SExy { x, y } => {
+                if self.regs[x] == self.regs[y] {
+                    self.pc += 2
+                }
+            }
+            SHL { x, .. } => {
+                self.regs[0xF] = self.regs[x] >> 7;
+                self.regs[x] <<= 1
+            }
+            SHR { x, .. } => {
+                self.regs[0xF] = self.regs[x] & 1;
+                self.regs[x] >>= 1
+            }
+            SKNP { x } => {
+                if self.keypad & (1 << self.regs[x]) == 0 {
+                    self.pc += 2
+                }
+            }
+            SKP { x } => {
+                if self.keypad & (1 << self.regs[x]) != 0 {
+                    self.pc += 2
+                }
+            }
+            SNExkk { x, kk } => {
+                if self.regs[x] != kk {
+                    self.pc += 2
+                }
+            }
+            SNExy { x, y } => {
+                if self.regs[x] != self.regs[y] {
+                    self.pc += 2
+                }
+            }
+            SUB { x, y } => {
+                let (new, borrow) = self.regs[x].overflowing_sub(self.regs[y]);
+                self.regs[x] = new;
+                self.regs[0xF] = !borrow as u8
+            }
+            SUBN { x, y } => {
+                let (new, borrow) = self.regs[y].overflowing_sub(self.regs[x]);
+                self.regs[x] = new;
+                self.regs[0xF] = !borrow as u8
+            }
             XOR { x, y } => self.regs[x] ^= self.regs[y],
         }
     }
@@ -177,7 +246,11 @@ impl Chip8 {
 
         for yoffset in 0..16 {
             for xoffset in 0..16 {
-                if (self.mem[self.i as usize + yoffset * 2 + (xoffset >> 3)] >> (7 - (xoffset & 0x07)) & 0x01) == 1 {
+                if (self.mem[self.i as usize + yoffset * 2 + (xoffset >> 3)]
+                    >> (7 - (xoffset & 0x07))
+                    & 0x01)
+                    == 1
+                {
                     let x = self.regs[x] as usize + xoffset;
                     let y = self.regs[y] as usize + yoffset;
 
@@ -234,10 +307,41 @@ impl Chip8 {
     }
 }
 
+impl std::fmt::Debug for Chip8 {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "Chip8:")?;
+        writeln!(f, "  PC: 0x{:03x}", self.pc)?;
+
+        writeln!(f, "  Registers:")?;
+        for index in 0..REGISTER_COUNT {
+            writeln!(f, "    V{:X}: {:02x}", index, self.regs[index])?;
+        }
+
+        writeln!(f, "  Memory:")?;
+        write!(f, "         ")?;
+        for col in 0..DEBUG_MEMORY_ROW_SIZE {
+            write!(f, "{:02x} ", col)?;
+        }
+        write!(f, "\n")?;
+
+        for (index, row) in self.mem.chunks(DEBUG_MEMORY_ROW_SIZE).enumerate() {
+            write!(f, "    {:03x}  ", index * DEBUG_MEMORY_ROW_SIZE)?;
+
+            for byte in row {
+                write!(f, "{:02x} ", byte)?;
+            }
+
+            write!(f, "\n")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::Instruction::*;
+    use super::*;
 
     #[test]
     fn apply_keypad_value() {
